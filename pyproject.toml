@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "Python, Git & TGGL Tracker Utility"
+version = "0.1.0"
+description = "Python, Git & TGGL Tracker Utility"
+authors = ["David Kasakaitis <davidkasakaitis@proton.me>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.test.dependencies]
+pytest = "7.4.3"

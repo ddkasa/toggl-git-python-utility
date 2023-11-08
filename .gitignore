@@ -1,2 +1,8 @@
-# ENVS
+# ENV
 .vscode
+
+# Cache
+.pytest_cache
+
+# Config
+src/config
