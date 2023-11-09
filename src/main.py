@@ -1,9 +1,12 @@
-# import sys
+import sys
+import os
+from typing import Optional
+from pathlib import Path
 import logging
-import requests
+import requests  # type: ignore
+# import configparser
 from base64 import b64encode
 from typing import NamedTuple
-
 import subprocess
 
 APP_NAME = "Python, Git & TGGL Tracker Utility"
@@ -24,11 +27,9 @@ class TgglTracker(NamedTuple):
 class NotTrackingerror(Exception):
     """Exception if a user is not tracking on Toggl."""
 
-    def __str__(self) -> str:
-        return self.__class__.__name__
-
 
 class TgglApi:
+    """Setup for dealing with the Toggl API."""
 
     def __init__(self, auth_token: TgglAuth):
         self.email = auth_token.user
@@ -74,18 +75,37 @@ class TgglApi:
         if code != 200:
             logging.error("Failed to stop time entry.")
             logging.error(f"Response: {code}")
-
             return False
 
         return True
 
 
-def check_git_repo() -> bool:
-    """Checks the current folder for a git repository."""
-    is_git_repo = "git rev-parse --is-inside-work-tree"
-    command = subprocess.run(is_git_repo, capture_output=True, text=True)
-    response = command.stdout
-    return "true" in response
+class GitManagement:
+    """Class for dealing with git commands and manipulation."""
+    def __init__(self, path: Path = Path(".")):
+        self.path = path if path is not None else Path(".")
+        if path is not None and path != Path("."):
+            os.chdir(path)
+
+    def create_commit(self, message: str):
+        """Creates a commit with the message specified."""
+        message = message.upper()
+        logging.info(f"Creating a git commit with message: {message}.")
+        command = f'git commit -a -m "{message}"'
+        print(command)
+        subprocess.run(command)
+
+    def push_to_remote_repo(self, branch: str = "main"):
+        """Pushes current repo to the specificed branch."""
+        command = f"git push origin {branch}"
+        subprocess.run(command)
+
+    def check_git_repo(self) -> bool:
+        """Checks the current folder for a git repository."""
+        is_git_repo = "git rev-parse --is-inside-work-tree"
+        command = subprocess.run(is_git_repo, capture_output=True, text=True)
+        response = command.stdout
+        return "true" in response
 
 
 def main(auth: TgglAuth):
@@ -93,12 +113,18 @@ def main(auth: TgglAuth):
     >>> 0a. Configuration -> API, Working Directory
         0b. Check if the current directory is a git repo.
     >>> 1. This needs to pull the current tracker.
-    >>> 2. Create config/docfiles such as requirements, poetry
-    >>> 3. Pull Tracker Message / Add to Commit / Cancel Tracker
+    >>> 2. Create config/docfiles such as requis/ Cancel Tracker
     """
+    repo_path = Path(".")
+    if not repo_path.exists():
+        logging.critical("Specfied repo folder does not exist.")
+        sys.exit()
 
-    if not check_git_repo():
-        return
+    git_obj = GitManagement(repo_path)
+
+    if not git_obj.check_git_repo():
+        logging.critical("Specified folder is not a GIT repo.")
+        sys.exit()
 
     tggl_api = TgglApi(auth)
 
@@ -106,16 +132,19 @@ def main(auth: TgglAuth):
         entry = tggl_api.grab_tggl_time_entry()
     except ConnectionError:
         logging.critical("Failed to grab the current tggl entry.")
-        return
+        sys.exit()
     except NotTrackingerror:
         logging.critical("User is not tracking a time entry atm.")
-        return
+        sys.exit()
+
+    git_obj.create_commit(entry.description)
+
+    git_obj.push_to_remote_repo()
 
     tggl_api.stop_tggl_time_entry(entry.workspace_id, entry.entry_id)
 
 
 if __name__ == "__main__":
-    # from pprint import pprint
     from config import secure_files as SF
 
     FMT = "%(asctime)s | %(module)s@%(funcName)s:%(lineno)d | %(levelname)s ->"

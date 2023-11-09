@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "Python, Git & Toggl Tracker Utility"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python, Git & Toggl Tracker Utility"
 authors = ["David Kasakaitis <davidkasakaitis@proton.me>"]
 license = "MIT"
