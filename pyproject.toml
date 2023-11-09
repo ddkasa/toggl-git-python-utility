@@ -1,13 +1,13 @@
 [tool.poetry]
-name = "Python, Git & TGGL Tracker Utility"
+name = "Python, Git & Toggl Tracker Utility"
 version = "0.1.0"
-description = "Python, Git & TGGL Tracker Utility"
+description = "Python, Git & Toggl Tracker Utility"
 authors = ["David Kasakaitis <davidkasakaitis@proton.me>"]
 license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.11"
 
 [build-system]
 requires = ["poetry-core"]

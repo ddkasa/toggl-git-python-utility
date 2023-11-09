@@ -1,3 +1,3 @@
-# Python, Git & TGGL Tracker Utility
+# Python, Git & Toggl Tracker Utility
 
-- Utility for managing time tracking with **Tggl Tracker**, **Git** commits and automated **Python** documentation/utilities.
+- Utility for managing time tracking with **Toggl Tracker**, **Git** commits and automated **Python** documentation/utilities.
