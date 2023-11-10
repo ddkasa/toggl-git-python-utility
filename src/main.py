@@ -3,11 +3,12 @@ import os
 from typing import Optional
 from pathlib import Path
 import logging
-import requests  # type: ignore
-# import configparser
+import requests
 from base64 import b64encode
 from typing import NamedTuple
 import subprocess
+
+import config_func as CF
 
 APP_NAME = "Python, Git & TGGL Tracker Utility"
 
@@ -24,7 +25,11 @@ class TgglTracker(NamedTuple):
     description: str
 
 
-class NotTrackingerror(Exception):
+class TrackerError(Exception):
+    """Exception related to anything todo with Toggl data."""
+
+
+class NotTrackingerror(TrackerError):
     """Exception if a user is not tracking on Toggl."""
 
 
@@ -39,10 +44,12 @@ class TgglApi:
         self.auth_encode = "Basic %s" % decode
 
         self.base_url = r'https://api.track.toggl.com/api/v9'
-        self.headers = {'content-type': 'application/json',
-                        'Authorization': self.auth_encode}
+        self.headers = {
+            'content-type': 'application/json',
+            'Authorization': self.auth_encode
+        }
 
-    def grab_tggl_time_entry(self) -> TgglTracker:
+    def grab_tggl_time_entry(self, project_id: int = 0) -> TgglTracker:
         """Grabs the specified users current tggl entry"""
         logging.info(f"Grabbing current tggl time entry for user {self.email}")
         response = requests.get(self.base_url + "/me/time_entries/current",
@@ -57,14 +64,17 @@ class TgglApi:
         if not isinstance(content, dict):
             raise NotTrackingerror("Specified user is not tracking atm.")
 
-        tracker = TgglTracker(content["id"],
-                              content["workspace_id"],
+        tracker_project_id = content.get("project_id", 0)
+        if project_id != 0 and project_id != tracker_project_id:
+            raise TrackerError("Wrong project id: ", tracker_project_id)
+
+        tracker = TgglTracker(content["id"], content["workspace_id"],
                               content["description"])
 
         return tracker
 
-    def stop_tggl_time_entry(self, workspace_id: int, time_entry_id: int
-                             ) -> bool:
+    def stop_tggl_time_entry(self, workspace_id: int,
+                             time_entry_id: int) -> bool:
         """Stops the specified time tracker."""
         logging.info(f"Stopping time tracker with id {time_entry_id}")
         url = self.base_url
@@ -91,12 +101,13 @@ class GitManagement:
         """Creates a commit with the message specified."""
         message = message.upper()
         logging.info(f"Creating a git commit with message: {message}.")
+        print("-".center)
         command = f'git commit -a -m "{message}"'
-        print(command)
         subprocess.run(command)
 
     def push_to_remote_repo(self, branch: str = "main"):
         """Pushes current repo to the specificed branch."""
+        print("-".center)
         command = f"git push origin {branch}"
         subprocess.run(command)
 
@@ -114,6 +125,13 @@ def main(auth: TgglAuth):
         0b. Check if the current directory is a git repo.
     >>> 1. This needs to pull the current tracker.
     >>> 2. Create config/docfiles such as requis/ Cancel Tracker
+        2a. Check directory for env type and if it contains a req file or
+            poetry file / conda env
+        2b. Create automatic req files with that info.
+        3a. Run Tests
+    >>> 3. Use TGGL Tracker to create commit information and commit + push
+        3b. Possibly add files to repo here in the future.
+    >>> 4. End the TGGL Tracker
     """
     repo_path = Path(".")
     if not repo_path.exists():
@@ -129,7 +147,7 @@ def main(auth: TgglAuth):
     tggl_api = TgglApi(auth)
 
     try:
-        entry = tggl_api.grab_tggl_time_entry()
+        entry = tggl_api.grab_tggl_time_entry(project_id=SF.PROJECT_ID)
     except ConnectionError:
         logging.critical("Failed to grab the current tggl entry.")
         sys.exit()
@@ -153,6 +171,6 @@ if __name__ == "__main__":
 
     logging.info(APP_NAME.upper())
 
-    tauth = TgglAuth(*SF.tggl_api)
+    tauth = TgglAuth(*SF.TGGL_API)
 
     main(tauth)
