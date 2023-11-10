@@ -4,7 +4,7 @@ from typing import Optional
 from pathlib import Path
 import logging
 import requests
-from base64 import b64encode
+from base64 import b64encode, b64decode
 from typing import NamedTuple
 import subprocess
 
@@ -38,7 +38,9 @@ class TgglApi:
 
     def __init__(self, auth_token: TgglAuth):
         self.email = auth_token.user
-        password = auth_token.pw
+
+        password = b64decode(auth_token.pw).decode("utf-8")
+
         auth_txt = f"{self.email}:{password}"
         decode = b64encode(bytes(auth_txt, "utf-8")).decode("ascii")
         self.auth_encode = "Basic %s" % decode
@@ -107,7 +109,7 @@ class GitManagement:
 
     def push_to_remote_repo(self, branch: str = "main"):
         """Pushes current repo to the specificed branch."""
-        print("-".center)
+        print("-".center(60, "-"))
         command = f"git push origin {branch}"
         subprocess.run(command)
 
@@ -119,7 +121,7 @@ class GitManagement:
         return "true" in response
 
 
-def main(auth: TgglAuth):
+def main():
     """
     >>> 0a. Configuration -> API, Working Directory
         0b. Check if the current directory is a git repo.
@@ -133,7 +135,9 @@ def main(auth: TgglAuth):
         3b. Possibly add files to repo here in the future.
     >>> 4. End the TGGL Tracker
     """
-    repo_path = Path(".")
+    config = CF.ConfigManager()
+
+    repo_path = Path(config["Main"]["target_directory"])
     if not repo_path.exists():
         logging.critical("Specfied repo folder does not exist.")
         sys.exit()
@@ -144,33 +148,36 @@ def main(auth: TgglAuth):
         logging.critical("Specified folder is not a GIT repo.")
         sys.exit()
 
+    tggl_data = config["Toggl"]
+
+    auth = TgglAuth(tggl_data["username"], tggl_data["password"],
+                    tggl_data["api_key"])
+
     tggl_api = TgglApi(auth)
 
     try:
-        entry = tggl_api.grab_tggl_time_entry(project_id=SF.PROJECT_ID)
+        project_id = int(config["Toggl"]["project"])
+        entry = tggl_api.grab_tggl_time_entry(project_id)
     except ConnectionError:
         logging.critical("Failed to grab the current tggl entry.")
         sys.exit()
     except NotTrackingerror:
         logging.critical("User is not tracking a time entry atm.")
         sys.exit()
+    if config["Git"]["commit"] == "1":
+        git_obj.create_commit(entry.description)
+    if config["Git"]["push"] == "1":
+        git_obj.push_to_remote_repo()
 
-    git_obj.create_commit(entry.description)
-
-    git_obj.push_to_remote_repo()
-
-    tggl_api.stop_tggl_time_entry(entry.workspace_id, entry.entry_id)
+    if config["Toggl"]["cancel"] == "1":
+        tggl_api.stop_tggl_time_entry(entry.workspace_id, entry.entry_id)
 
 
 if __name__ == "__main__":
-    from config import secure_files as SF
-
     FMT = "%(asctime)s | %(module)s@%(funcName)s:%(lineno)d | %(levelname)s ->"
     FMT += " %(message)s"
     logging.basicConfig(format=FMT, level=logging.INFO)
 
     logging.info(APP_NAME.upper())
 
-    tauth = TgglAuth(*SF.TGGL_API)
-
-    main(tauth)
+    main()
