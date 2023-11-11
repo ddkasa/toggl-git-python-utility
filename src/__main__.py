@@ -94,10 +94,17 @@ class TgglApi:
 
 class GitManagement:
     """Class for dealing with git commands and manipulation."""
+
     def __init__(self, path: Path = Path(".")):
         self.path = path if path is not None else Path(".")
         if path is not None and path != Path("."):
             os.chdir(path)
+
+    def add_files(self):
+        """Adds all files to version control."""
+        logging.info("Adding files to version control.")
+        command = "git add ."
+        subprocess.run(command)
 
     def create_commit(self, message: str):
         """Creates a commit with the message specified."""
@@ -119,6 +126,16 @@ class GitManagement:
         command = subprocess.run(is_git_repo, capture_output=True, text=True)
         response = command.stdout
         return "true" in response
+
+
+class CodeManagement:
+    """
+    >>> Deals with managing automatic linting, environment, tests
+        and dependency management.
+    """
+
+    def __init__(self, config: CF.ConfigManager):
+        self.config = config["Python"]
 
 
 def main():
@@ -164,8 +181,13 @@ def main():
     except NotTrackingerror:
         logging.critical("User is not tracking a time entry atm.")
         sys.exit()
+
+    if config["Git"]["add"] == "1":
+        git_obj.add_files()
+
     if config["Git"]["commit"] == "1":
         git_obj.create_commit(entry.description)
+
     if config["Git"]["push"] == "1":
         git_obj.push_to_remote_repo()
 

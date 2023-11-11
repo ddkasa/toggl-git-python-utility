@@ -14,8 +14,8 @@ class ConfigManager(configparser.ConfigParser):
         "target_directory": Path,
         "python": {
             "package_manager": (Literal["PIP", "Conda", "Poetry"], "PIP"),
-            "environment": (Literal["Conda", "Poetry", "Venv"], "Venv"),
-            "type_checking": (Optional[Literal["Mypy"]], "None"),
+            "environment": (Literal["Conda", "Venv"], "Venv"),
+            "type_checking": (Optional[Literal["Mypy"]], None),
             "linting": (Optional[Literal["Flake8", "Mypy", "Ruff", "Pylint"]],
                         None),
             "tests": (Optional[Literal["Unittest", "Pytest"]], None)
