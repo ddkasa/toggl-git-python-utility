@@ -1,14 +1,15 @@
 import sys
 import os
-from typing import Optional
+from typing import Literal
 from pathlib import Path
 import logging
 import requests
 from base64 import b64encode, b64decode
 from typing import NamedTuple
-import subprocess
 
-import config_func as CF
+
+import toggl_git_python_utility.config_func as CF
+import toggl_git_python_utility.util as util
 
 APP_NAME = "Python, Git & TGGL Tracker Utility"
 
@@ -93,7 +94,11 @@ class TgglApi:
 
 
 class GitManagement:
-    """Class for dealing with git commands and manipulation."""
+    """
+    >>> Class for dealing with git commands and manipulation.
+    >>> *Possibly convert this to GitPython in the future in order to invoke
+        more control over whats been run.
+    """
 
     def __init__(self, path: Path = Path(".")):
         self.path = path if path is not None else Path(".")
@@ -104,38 +109,103 @@ class GitManagement:
         """Adds all files to version control."""
         logging.info("Adding files to version control.")
         command = "git add ."
-        subprocess.run(command)
+        util.run_sub_command(command)
 
     def create_commit(self, message: str):
         """Creates a commit with the message specified."""
-        message = message.upper()
+        message = message.title()
         logging.info(f"Creating a git commit with message: {message}.")
-        print("-".center)
         command = f'git commit -a -m "{message}"'
-        subprocess.run(command)
+        util.run_sub_command(command)
 
     def push_to_remote_repo(self, branch: str = "main"):
         """Pushes current repo to the specificed branch."""
-        print("-".center(60, "-"))
         command = f"git push origin {branch}"
-        subprocess.run(command)
+        util.run_sub_command(command)
 
     def check_git_repo(self) -> bool:
         """Checks the current folder for a git repository."""
         is_git_repo = "git rev-parse --is-inside-work-tree"
-        command = subprocess.run(is_git_repo, capture_output=True, text=True)
-        response = command.stdout
-        return "true" in response
+        output = util.run_sub_command(is_git_repo)
+        return "true" in output
 
 
 class CodeManagement:
     """
     >>> Deals with managing automatic linting, environment, tests
         and dependency management.
+    >>> *Will want to expand this to run the actual python modules themselves
+        in the future.
     """
 
-    def __init__(self, config: CF.ConfigManager):
+    def __init__(self, config: CF.ConfigManager, path: Path = Path(".")):
+        self.path = path
+        if path.exists() and path != Path("."):
+            os.chdir(path)
+
         self.config = config["Python"]
+        self.package_manager = self.config["package_manager"]
+
+    def run_management_routine(self):
+        logging.info("Running current code checking routine.")
+        logging.debug(f"Config: {self.config}")
+        tests = self.config["tests"]
+
+        if tests is not None:
+            try:
+                self.test_code(tests)  # type: ignore
+            except SystemError as s:
+                logging.critical(s)
+                logging.critical("Code failed tests. Exiting.")
+                sys.exit()
+
+        type_checking = self.config["type_checking"]
+        if type_checking is not None:
+            self.type_check_code()
+
+        lint = self.config["linting"]
+        if lint is not None:
+            self.lint_code()
+
+        if self.package_manager is not None:
+            self.generate_requirements()
+
+    def test_code(self, module: Literal["Unittest", "Pytest"]):
+        """
+        >>> Functions tests with given framework and cancel script if they
+            fail.
+        >>> *Future implementation may include running the pytest module itself
+            for a more clear execution.
+        >>> Also might be nice to have a threshold for failed tests here in the
+            future.
+        >>> [This func will throw a SystemError if the tests fail.]
+        """
+
+        if module == "Unittest":
+            return
+
+        cmd = "pytest tests -v"
+        if self.package_manager == "Poetry":
+            cmd = "poetry run " + cmd
+        output = util.run_sub_command(cmd)
+
+        if "failed" in output:
+            raise SystemError("All or some of the tests failed.")
+
+        return
+
+    def lint_code(self):
+        pass
+
+    def type_check_code(self):
+        pass
+
+    def generate_requirements(self):
+        if self.package_manager == "Poetry":
+            cmd = "poetry lock"
+        else:
+            return
+        util.run_sub_command(cmd)
 
 
 def main():
@@ -181,6 +251,9 @@ def main():
     except NotTrackingerror:
         logging.critical("User is not tracking a time entry atm.")
         sys.exit()
+
+    code_obj = CodeManagement(config, repo_path)
+    code_obj.run_management_routine()
 
     if config["Git"]["add"] == "1":
         git_obj.add_files()

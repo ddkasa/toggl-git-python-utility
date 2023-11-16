@@ -36,7 +36,7 @@ class ConfigManager(configparser.ConfigParser):
 
     def __init__(self, *args, **kwargs):
         super(ConfigManager, self).__init__(*args, **kwargs)
-        self.config_folder = Path(r"src\config")
+        self.config_folder = Path(r"toggl_git_python_utility\config")
 
         self.config_file = self.config_folder / "configuration.ini"
 

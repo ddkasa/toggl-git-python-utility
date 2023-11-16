@@ -31,4 +31,4 @@ MANIFEST
 .pytest_cache
 
 # Config
-src/config/
+toggl_git_python_utility/config/
