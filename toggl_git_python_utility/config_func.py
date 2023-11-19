@@ -18,7 +18,8 @@ class ConfigManager(configparser.ConfigParser):
             "type_checking": (Optional[Literal["Mypy"]], None),
             "linting": (Optional[Literal["Flake8", "Mypy", "Ruff", "Pylint"]],
                         None),
-            "tests": (Optional[Literal["Unittest", "Pytest"]], None)
+            "tests": (Optional[Literal["Unittest", "Pytest"]], None),
+            "code_sub_location": (str, "src")
         },
         "git": {
             "add": (bool, False),

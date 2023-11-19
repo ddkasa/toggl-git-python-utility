@@ -5,8 +5,7 @@ from pathlib import Path
 import logging
 import requests
 from base64 import b64encode, b64decode
-from typing import NamedTuple
-
+from typing import NamedTuple, Optional
 
 import toggl_git_python_utility.config_func as CF
 import toggl_git_python_utility.util as util
@@ -147,6 +146,10 @@ class CodeManagement:
         self.package_manager = self.config["package_manager"]
 
     def run_management_routine(self):
+        """
+        >>> Runs the whole code management routine depending on the config
+            supplied.
+        """
         logging.info("Running current code checking routine.")
         logging.debug(f"Config: {self.config}")
         tests = self.config["tests"]
@@ -165,7 +168,7 @@ class CodeManagement:
 
         lint = self.config["linting"]
         if lint is not None:
-            self.lint_code()
+            self.lint_code(lint)
 
         if self.package_manager is not None:
             self.generate_requirements()
@@ -194,8 +197,21 @@ class CodeManagement:
 
         return
 
-    def lint_code(self):
-        pass
+    def lint_code(self, linter: Literal["Flake8", "Mypy", "Ruff", "Pylint"]):
+        """
+        >>> Function that will run the chosen linter and break the rest of the
+            routine depending on the configuration. e.g. code 'W291' is marked
+            as breaking.
+        """
+
+        code_location = self.config["code_sub_location"]
+        if linter == "Flake8":
+            cmd = f"flake8 .\\{code_location}\\"
+        else:
+            # implementing the other linters at some other point
+            return
+
+        util.run_sub_command(cmd)
 
     def type_check_code(self):
         pass
