@@ -16,7 +16,8 @@ def run_sub_command(cmd: str) -> str:
     print("Subprocess".center(width, "+"))
     print(cmd)
     run = subprocess.run(cmd, capture_output=True, text=True)
-    print("+".center(width, "+"))
+    print(run.stdout)
+    create_seperator("+")
     return run.stdout
 
 
@@ -44,6 +45,9 @@ def all_annotations(cls: Any) -> ChainMap:
 
 
 def collect_defaults(cls: type) -> defaultdict:
+    if not isinstance(cls, type):
+        cls = cls.__class__
+
     defaults = defaultdict(lambda: None)
 
     if "__dataclass_fields__" not in cls.__dict__:
@@ -61,14 +65,9 @@ def collect_defaults(cls: type) -> defaultdict:
     return defaults
 
 
-def create_seperator():
+def create_seperator(symbol: str = "#"):
     w, _ = shutil.get_terminal_size()
-    print("#".center(w, "#"))
-
-
-def isinstance_NamedTuple(obj: Any) -> bool:
-    return (isinstance(obj, tuple) and hasattr(obj, '_asdict')
-            and hasattr(obj, '_fields'))
+    print(symbol.center(w, symbol))
 
 
 class CustomJSONEncoder(json.JSONEncoder):
