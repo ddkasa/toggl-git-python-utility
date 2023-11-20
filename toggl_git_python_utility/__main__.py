@@ -7,10 +7,12 @@ import requests
 from base64 import b64encode, b64decode
 from typing import NamedTuple, Optional
 
-import toggl_git_python_utility.config_func as CF
+
+from toggl_git_python_utility.config_func import (ConfigManager, PythonConfig,
+                                                  TogglConfig)
 import toggl_git_python_utility.util as util
 
-APP_NAME = "Python, Git & TGGL Tracker Utility"
+APP_NAME = "Python, Git & Toggl Tracker Utility"
 
 
 class TgglTracker(NamedTuple):
@@ -30,10 +32,11 @@ class NotTrackingerror(TrackerError):
 class TgglApi:
     """Setup for dealing with the Toggl API."""
 
-    def __init__(self, auth_token: TgglAuth):
-        self.email = auth_token.user
+    def __init__(self, auth_token: TogglConfig):
+        user_data = auth_token.user_data
+        self.email = user_data.username
 
-        password = b64decode(auth_token.pw).decode("utf-8")
+        password = b64decode(user_data.password).decode("utf-8")
 
         auth_txt = f"{self.email}:{password}"
         decode = b64encode(bytes(auth_txt, "utf-8")).decode("ascii")
@@ -45,7 +48,8 @@ class TgglApi:
             'Authorization': self.auth_encode
         }
 
-    def grab_tggl_time_entry(self, project_id: int = 0) -> TgglTracker:
+    def grab_tggl_time_entry(self,
+                             project_id: Optional[int] = None) -> TgglTracker:
         """Grabs the specified users current tggl entry"""
         logging.info(f"Grabbing current tggl time entry for user {self.email}")
         response = requests.get(self.base_url + "/me/time_entries/current",
@@ -61,7 +65,7 @@ class TgglApi:
             raise NotTrackingerror("Specified user is not tracking atm.")
 
         tracker_project_id = content.get("project_id", 0)
-        if project_id != 0 and project_id != tracker_project_id:
+        if project_id is not None and project_id != tracker_project_id:
             raise TrackerError("Wrong project id: ", tracker_project_id)
 
         tracker = TgglTracker(content["id"], content["workspace_id"],
@@ -131,13 +135,13 @@ class CodeManagement:
         in the future.
     """
 
-    def __init__(self, config: CF.ConfigManager, path: Path = Path(".")):
+    def __init__(self, config: PythonConfig, path: Path = Path(".")):
         self.path = path
         if path.exists() and path != Path("."):
             os.chdir(path)
 
-        self.config = config["Python"]
-        self.package_manager = self.config["package_manager"]
+        self.config = config
+        self.package_manager = config.package_manager
 
     def run_management_routine(self):
         """
@@ -146,7 +150,7 @@ class CodeManagement:
         """
         logging.info("Running current code checking routine.")
         logging.debug(f"Config: {self.config}")
-        tests = self.config["tests"]
+        tests = self.config.tests
 
         if tests is not None:
             try:
@@ -156,11 +160,11 @@ class CodeManagement:
                 logging.critical("Code failed tests. Exiting.")
                 sys.exit()
 
-        type_checking = self.config["type_checking"]
+        type_checking = self.config.type_checking
         if type_checking is not None:
             self.type_check_code()
 
-        lint = self.config["linting"]
+        lint = self.config.linting
         if lint is not None:
             self.lint_code(lint)
 
@@ -198,7 +202,7 @@ class CodeManagement:
             as breaking.
         """
 
-        code_location = self.config["code_sub_location"]
+        code_location = self.config.main_code
         if linter == "Flake8":
             cmd = f"flake8 .\\{code_location}\\"
         else:
@@ -232,9 +236,10 @@ def main():
         3b. Possibly add files to repo here in the future.
     >>> 4. End the TGGL Tracker
     """
-    config = CF.ConfigManager()
+    config_manager = ConfigManager()
+    config = config_manager.config
 
-    repo_path = Path(config["Main"]["target_directory"])
+    repo_path = config.target_directory
     if not repo_path.exists():
         logging.critical("Specfied repo folder does not exist.")
         sys.exit()
@@ -245,17 +250,10 @@ def main():
         logging.critical("Specified folder is not a GIT repo.")
         sys.exit()
 
-    tggl_data = config["Toggl"]
-
-    auth = TgglAuth(tggl_data["username"],
-                    tggl_data["password"],
-                    tggl_data["api_key"])
-
-    tggl_api = TgglApi(auth)
+    tggl_api = TgglApi(config.toggl)
 
     try:
-        project_id = int(config["Toggl"]["project"])
-        entry = tggl_api.grab_tggl_time_entry(project_id)
+        entry = tggl_api.grab_tggl_time_entry(config.toggl.project)
     except ConnectionError:
         logging.critical("Failed to grab the current tggl entry.")
         sys.exit()
@@ -265,19 +263,19 @@ def main():
 
     logging.info(f"Current time entry name is: {entry.description}")
 
-    code_obj = CodeManagement(config, repo_path)
+    code_obj = CodeManagement(config.python, repo_path)
     code_obj.run_management_routine()
 
-    if config["Git"]["add"] == "1":
+    if config.git.add:
         git_obj.add_files()
 
-    if config["Git"]["commit"] == "1":
+    if config.git.commit:
         git_obj.create_commit(entry.description)
 
-    if config["Git"]["push"] == "1":
+    if config.git.push:
         git_obj.push_to_remote_repo()
 
-    if config["Toggl"]["cancel"] == "1":
+    if config.toggl.cancel:
         tggl_api.stop_tggl_time_entry(entry.workspace_id, entry.entry_id)
 
 

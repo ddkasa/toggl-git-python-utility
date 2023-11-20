@@ -1,9 +1,11 @@
 from pathlib import Path
 
-from typing import Any, ForwardRef
+
+from dataclasses import _MISSING_TYPE, is_dataclass
+from typing import Any, NamedTuple
 import json
 
-from collections import ChainMap
+from collections import ChainMap, defaultdict
 
 import subprocess
 import shutil
@@ -39,6 +41,34 @@ def all_annotations(cls: Any) -> ChainMap:
                 anno[key] = val
 
     return ChainMap(anno)
+
+
+def collect_defaults(cls: type) -> defaultdict:
+    defaults = defaultdict(lambda: None)
+
+    if "__dataclass_fields__" not in cls.__dict__:
+        return defaults
+
+    fields = cls.__dataclass_fields__  # type: ignore
+
+    for k, v in fields.items():
+        default = v.default
+        if isinstance(default, _MISSING_TYPE):
+            default = None
+
+        defaults[k] = default
+
+    return defaults
+
+
+def create_seperator():
+    w, _ = shutil.get_terminal_size()
+    print("#".center(w, "#"))
+
+
+def isinstance_NamedTuple(obj: Any) -> bool:
+    return (isinstance(obj, tuple) and hasattr(obj, '_asdict')
+            and hasattr(obj, '_fields'))
 
 
 class CustomJSONEncoder(json.JSONEncoder):

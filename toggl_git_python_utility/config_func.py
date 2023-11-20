@@ -1,16 +1,19 @@
 import sys
 import os
+import shutil
 from typing import (
     Final, Literal, Optional, get_args, Any, get_origin, Union, NamedTuple
     )
 import logging
+from pprint import pformat, pprint
+
 import base64
 import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-import configparser
 
 import json
+
 
 import maskpass
 
@@ -28,9 +31,13 @@ class PythonConfig:
     package_manager: Literal["PIP", "Conda", "Poetry"] = field(default="PIP")
     environment: Literal["Conda", "Venv"] = field(default="Venv")
     type_checking: Optional[Literal["Mypy"]] = field(default=None)
-    linting: Optional[Literal["Flake8", "Mypy", "Ruff", "Pylint"]] = field(default=None)
+    linting: Optional[Literal["Flake8", "Mypy", "Ruff", "Pylint"]]\
+          = field(default=None)
     tests: Optional[Literal["Unittest", "Pytest"]] = field(default=None)
     main_code: Path = field(default=Path("src"))
+
+    def __post_init__(self):
+        self.main_code = Path(self.main_code)
 
 
 @dataclass
@@ -41,7 +48,8 @@ class GitConfig:
     push: bool = field(default=False)
 
 
-class TogglAuth(NamedTuple):
+@dataclass
+class TogglAuth:
     username: str
     password: str
     api_key: str
@@ -55,7 +63,7 @@ class TogglConfig:
 
 
 @dataclass
-class DefaultConfig:
+class ConfigModel:
     target_directory: Path = field()
     python: PythonConfig
     git: GitConfig
@@ -70,7 +78,6 @@ class ConfigManager:
 
     def __init__(self):
         self.config_folder = Path(r"toggl_git_python_utility\config")
-
         self.config_file_path = self.config_folder / "configuration.json"
 
         if self.config_file_path.exists():
@@ -78,7 +85,24 @@ class ConfigManager:
             return
 
         logging.warning("No Configuration Detected")
-        self.config = self.generate_config(DefaultConfig)
+        self.new_config()
+
+        self.config: ConfigModel
+
+    def load_config(self):
+        """Loads the existing configuration. If one doesn't exist or is
+           corrupted. It starts creating a new one."""
+        logging.info("Loading Configuration")
+        try:
+            with self.config_file_path.open("r", encoding="utf-8") as config:
+                data = json.load(config)
+                self.config = self.generate_config(ConfigModel, data)
+        except json.JSONDecodeError:
+            self.new_config()
+
+    def new_config(self):
+        """Creates a new config with user input and defaults."""
+        self.config = self.generate_config(ConfigModel)
 
         logging.info("Writing New Configuration To Save Location.")
 
@@ -86,24 +110,28 @@ class ConfigManager:
         with self.config_file_path.open("w", encoding="utf-8") as configfile:
             configfile.write(json.dumps(conf, cls=util.CustomJSONEncoder))
 
-    def load_config(self):
-        logging.info("Loading Configuration")
-        with self.config_file_path.open("r", encoding="utf-8") as config:
-            data = json.load(config)
-
-        self.config = self.generate_config(DefaultConfig, data)
-
     def generate_config(self, config_model: type,
-                        convert: Optional[dict] = None):
-        """Generates a json config or converts an existing one depending if a 
+                        convert: Optional[dict] = None) -> Any:
+        """Generates a json config or converts an existing one depending if a
            convert was passed in or not."""
 
         config_an = util.all_annotations(config_model)
+        defaults = util.collect_defaults(config_model)
+
+        if config_model not in {TogglConfig, TogglAuth, PythonConfig,
+                                GitConfig, ConfigModel}:
+            if get_origin(config_model) == Union:
+                config_model = get_args(config_model)[0]
+            if get_origin(config_model) == Literal:
+                config_model = str
+
+            return config_model(convert)
 
         data = {}
         for k, v in config_an.items():
+
             item = v
-            default = None
+            default = defaults[k]
             origin = get_origin(item)
 
             if origin == Union:
@@ -112,11 +140,11 @@ class ConfigManager:
             d = v
             if convert:
                 d = self.generate_config(v, convert[k])
-            if item == bool:
+            elif item == bool:
                 d = default
-            elif v == Path:
+            elif item == Path:
                 d = create_path(k)
-            elif v in {TogglConfig, TogglAuth, PythonConfig, GitConfig}:
+            elif item in {TogglConfig, TogglAuth, PythonConfig, GitConfig}:
                 d = self.generate_config(v)
             elif k in {"password", "api_key"}:
                 d = select_password(k)
@@ -124,7 +152,7 @@ class ConfigManager:
                 d = select_username()
             elif get_origin(item) == Literal:
                 d = select_option(k, item, default)
-            elif v == int:
+            elif item == int:
                 d = select_int(k)
 
             data[k] = d
@@ -133,6 +161,8 @@ class ConfigManager:
 
 
 def create_path(key: str, default=Path(".")) -> str:
+    util.create_seperator()
+
     key = key.replace("_", " ").title()
     while True:
         print(f"Please specify a valid target {key} path.")
@@ -147,6 +177,7 @@ def create_path(key: str, default=Path(".")) -> str:
 
 def select_option(key: str, values: Literal, default: Optional[Any] = None
                   ) -> Any:
+    util.create_seperator()
 
     items = get_args(values)
     len_it = len(items)
@@ -173,6 +204,7 @@ def select_option(key: str, values: Literal, default: Optional[Any] = None
 
 
 def select_username() -> str:
+    util.create_seperator()
     patt = r"([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+"
 
     regex = re.compile(patt)
@@ -188,6 +220,7 @@ def select_username() -> str:
 
 
 def select_password(key: str) -> str:
+    util.create_seperator()
     key = key.replace("_", " ").title()
     print(f"Type in your {key} for your Toggle Account")
     pw = maskpass.askpass(prompt=f"Enter {key}: ", mask="*")
@@ -196,6 +229,7 @@ def select_password(key: str) -> str:
 
 
 def select_int(key: str) -> int:
+    util.create_seperator()
     print(f"What is the {key} you want to use?")
 
     while True:
@@ -214,7 +248,3 @@ if __name__ == "__main__":
     FMT += " %(message)s"
     logging.basicConfig(format=FMT, level=logging.INFO)
     config = ConfigManager()
-
-    an = util.all_annotations(DefaultConfig)
-
-    print(an)
