@@ -1,102 +1,141 @@
-from typing import Final, Literal, Optional, get_args, Any, get_origin, Union
+import sys
+import os
+from typing import (
+    Final, Literal, Optional, get_args, Any, get_origin, Union, NamedTuple
+    )
 import logging
 import base64
 import re
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 import configparser
 
+import json
+
 import maskpass
 
+if __name__ == "__main__":
+    root_path = Path(__file__).parent.resolve().parents[0]
+    sys.path.append(os.path.abspath(root_path))
 
-class ConfigManager(configparser.ConfigParser):
+
+from toggl_git_python_utility import util
+
+
+@dataclass
+class PythonConfig:
+    """Holds configuration for python code management."""
+    package_manager: Literal["PIP", "Conda", "Poetry"] = field(default="PIP")
+    environment: Literal["Conda", "Venv"] = field(default="Venv")
+    type_checking: Optional[Literal["Mypy"]] = field(default=None)
+    linting: Optional[Literal["Flake8", "Mypy", "Ruff", "Pylint"]] = field(default=None)
+    tests: Optional[Literal["Unittest", "Pytest"]] = field(default=None)
+    main_code: Path = field(default=Path("src"))
+
+
+@dataclass
+class GitConfig:
+    """Holds configuration settings for git code management."""
+    add: bool = field(default=False)
+    commit: bool = field(default=True)
+    push: bool = field(default=False)
+
+
+class TogglAuth(NamedTuple):
+    username: str
+    password: str
+    api_key: str
+
+
+@dataclass
+class TogglConfig:
+    user_data: TogglAuth
+    project: Optional[int] = field(default=None)
+    cancel: bool = field(default=False)
+
+
+@dataclass
+class DefaultConfig:
+    target_directory: Path = field()
+    python: PythonConfig
+    git: GitConfig
+    toggl: TogglConfig
+
+    def __post_init__(self):
+        self.target_directory = Path(self.target_directory)
+
+
+class ConfigManager:
     """Class for managing basic configuration duties."""
-    CONFIG_DEFAULT: Final[dict] = {
-        "target_directory": Path,
-        "python": {
-            "package_manager": (Literal["PIP", "Conda", "Poetry"], "PIP"),
-            "environment": (Literal["Conda", "Venv"], "Venv"),
-            "type_checking": (Optional[Literal["Mypy"]], None),
-            "linting": (Optional[Literal["Flake8", "Mypy", "Ruff", "Pylint"]],
-                        None),
-            "tests": (Optional[Literal["Unittest", "Pytest"]], None),
-            "code_sub_location": (str, "src")
-        },
-        "git": {
-            "add": (bool, False),
-            "commit": (bool, True),
-            "push": (bool, False),
-        },
-        "toggl": {
-            "username": str,
-            "password": str,
-            "api_key": str,
-            "project": (Optional[int], None),
-            "cancel": (bool, True)
-        },
-    }
 
-    def __init__(self, *args, **kwargs):
-        super(ConfigManager, self).__init__(*args, **kwargs)
+    def __init__(self):
         self.config_folder = Path(r"toggl_git_python_utility\config")
 
-        self.config_file = self.config_folder / "configuration.ini"
+        self.config_file_path = self.config_folder / "configuration.json"
 
-        if self.config_file.exists():
+        if self.config_file_path.exists():
             self.load_config()
             return
 
         logging.warning("No Configuration Detected")
-        self.generate_config(self.CONFIG_DEFAULT)
+        self.config = self.generate_config(DefaultConfig)
 
         logging.info("Writing New Configuration To Save Location.")
-        with self.config_file.open("w", encoding="utf-8") as configfile:
-            self.write(configfile)
+
+        conf = asdict(self.config)
+        with self.config_file_path.open("w", encoding="utf-8") as configfile:
+            configfile.write(json.dumps(conf, cls=util.CustomJSONEncoder))
 
     def load_config(self):
         logging.info("Loading Configuration")
-        self.read(self.config_file, encoding="utf-8")
+        with self.config_file_path.open("r", encoding="utf-8") as config:
+            data = json.load(config)
 
-    def generate_config(self, value: dict[str, type | dict],
-                        key: str = "Main"):
-        key = key.capitalize()
-        self.add_section(key)
+        self.config = self.generate_config(DefaultConfig, data)
 
-        for k, v in value.items():
+    def generate_config(self, config_model: type,
+                        convert: Optional[dict] = None):
+        """Generates a json config or converts an existing one depending if a 
+           convert was passed in or not."""
+
+        config_an = util.all_annotations(config_model)
+
+        data = {}
+        for k, v in config_an.items():
             item = v
-            default = False
-            if isinstance(v, tuple):
-                item, default = v
+            default = None
             origin = get_origin(item)
 
             if origin == Union:
                 item = get_args(item)[0]
 
+            d = v
+            if convert:
+                d = self.generate_config(v, convert[k])
             if item == bool:
-                item = int(default)
-
-            elif item == int:
-                item = select_int(k)
-
-            elif k == "username":
-                item = select_username()
+                d = default
+            elif v == Path:
+                d = create_path(k)
+            elif v in {TogglConfig, TogglAuth, PythonConfig, GitConfig}:
+                d = self.generate_config(v)
             elif k in {"password", "api_key"}:
-                item = select_password(k)
-
-            elif item == Path:
-                item = create_path()
+                d = select_password(k)
+            elif k == "username":
+                d = select_username()
             elif get_origin(item) == Literal:
-                item = select_option(k, item, default)  # type: ignore
+                d = select_option(k, item, default)
+            elif v == int:
+                d = select_int(k)
 
-            elif isinstance(v, dict):
-                item = self.generate_config(v, k)
-                continue
+            data[k] = d
 
-            self.set(key, option=k, value=str(item))
+        return config_model(**data)
 
 
-def create_path(default=Path(".")) -> str:
+def create_path(key: str, default=Path(".")) -> str:
+    key = key.replace("_", " ").title()
     while True:
-        print("Please specify a valid target project path")
+        print(f"Please specify a valid target {key} path.")
 
         path = input("> ")
 
@@ -175,3 +214,7 @@ if __name__ == "__main__":
     FMT += " %(message)s"
     logging.basicConfig(format=FMT, level=logging.INFO)
     config = ConfigManager()
+
+    an = util.all_annotations(DefaultConfig)
+
+    print(an)

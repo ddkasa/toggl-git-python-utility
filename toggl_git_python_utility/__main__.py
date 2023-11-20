@@ -13,12 +13,6 @@ import toggl_git_python_utility.util as util
 APP_NAME = "Python, Git & TGGL Tracker Utility"
 
 
-class TgglAuth(NamedTuple):
-    user: str
-    pw: str
-    key: str
-
-
 class TgglTracker(NamedTuple):
     entry_id: int
     workspace_id: int
@@ -253,7 +247,8 @@ def main():
 
     tggl_data = config["Toggl"]
 
-    auth = TgglAuth(tggl_data["username"], tggl_data["password"],
+    auth = TgglAuth(tggl_data["username"],
+                    tggl_data["password"],
                     tggl_data["api_key"])
 
     tggl_api = TgglApi(auth)
@@ -267,6 +262,8 @@ def main():
     except NotTrackingerror:
         logging.critical("User is not tracking a time entry atm.")
         sys.exit()
+
+    logging.info(f"Current time entry name is: {entry.description}")
 
     code_obj = CodeManagement(config, repo_path)
     code_obj.run_management_routine()
