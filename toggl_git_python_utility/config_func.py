@@ -31,8 +31,9 @@ class PythonConfig:
     package_manager: Literal["PIP", "Conda", "Poetry"] = field(default="PIP")
     environment: Literal["Conda", "Venv"] = field(default="Venv")
     type_checking: Optional[Literal["Mypy"]] = field(default=None)
-    linting: Optional[Literal["Flake8", "Mypy", "Ruff", "Pylint"]]\
-          = field(default=None)
+    security_checking: Optional[Literal["Bandit"]] = field(default=None)
+    linting: Optional[Literal["Flake8", "Ruff", "Pylint"]]\
+        = field(default=None)
     tests: Optional[Literal["Unittest", "Pytest"]] = field(default=None)
     main_code: Path = field(default=Path("src"))
 
@@ -76,11 +77,11 @@ class ConfigModel:
 class ConfigManager:
     """Class for managing basic configuration duties."""
 
-    def __init__(self):
+    def __init__(self, new=False):
         self.config_folder = Path(r"toggl_git_python_utility\config")
         self.config_file_path = self.config_folder / "configuration.json"
 
-        if self.config_file_path.exists():
+        if self.config_file_path.exists() and not new:
             self.load_config()
             return
 
@@ -139,7 +140,7 @@ class ConfigManager:
 
             d = v
             if convert:
-                d = self.generate_config(v, convert[k])
+                d = self.generate_config(v, convert.get(k))
             elif item == bool:
                 d = default
             elif item == Path:

@@ -1,4 +1,5 @@
 import sys
+import argparse
 import os
 from typing import Literal
 from pathlib import Path
@@ -195,7 +196,7 @@ class CodeManagement:
 
         return
 
-    def lint_code(self, linter: Literal["Flake8", "Mypy", "Ruff", "Pylint"]):
+    def lint_code(self, linter: Literal["Flake8", "Ruff", "Pylint"]):
         """
         >>> Function that will run the chosen linter and break the rest of the
             routine depending on the configuration. e.g. code 'W291' is marked
@@ -205,11 +206,18 @@ class CodeManagement:
         code_location = self.config.main_code
         if linter == "Flake8":
             cmd = f"flake8 .\\{code_location}\\"
+        elif linter == "Ruff":
+            cmd = f"ruff check .\\{code_location}\\"
+        elif linter == "Pylint":
+            cmd = f"pylint .\\{code_location}\\"
         else:
             # implementing the other linters at some other point
             return
 
         util.run_sub_command(cmd)
+
+    def format_code(self):
+        pass
 
     def type_check_code(self):
         pass
@@ -222,7 +230,7 @@ class CodeManagement:
         util.run_sub_command(cmd)
 
 
-def main():
+def main(*argvs):
     """
     >>> 0a. Configuration -> API, Working Directory
         0b. Check if the current directory is a git repo.
@@ -236,7 +244,9 @@ def main():
         3b. Possibly add files to repo here in the future.
     >>> 4. End the TGGL Tracker
     """
-    config_manager = ConfigManager()
+    new_config = len(argvs) > 1 and argvs[1] in {"--new_config", "-nc"}
+
+    config_manager = ConfigManager(new_config)
     config = config_manager.config
 
     repo_path = config.target_directory
@@ -286,4 +296,4 @@ if __name__ == "__main__":
 
     logging.info(APP_NAME.upper())
 
-    main()
+    main(sys.argv)

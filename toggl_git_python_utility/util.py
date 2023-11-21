@@ -45,10 +45,12 @@ def all_annotations(cls: Any) -> ChainMap:
 
 
 def collect_defaults(cls: type) -> defaultdict:
+    """Collects default values of a Dataclass Class and replaces them with
+       None if needed."""
     if not isinstance(cls, type):
         cls = cls.__class__
 
-    defaults = defaultdict(lambda: None)
+    defaults: defaultdict[str, Any] = defaultdict(lambda: None)
 
     if "__dataclass_fields__" not in cls.__dict__:
         return defaults
