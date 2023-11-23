@@ -12,10 +12,11 @@ import shutil
 
 
 def run_sub_command(cmd: str) -> str:
+    """Runs the current provided command and prints/returns the out"""
     width, _ = shutil.get_terminal_size(fallback=(80, 24))
     print("Subprocess".center(width, "+"))
     print(cmd)
-    run = subprocess.run(cmd, capture_output=True, text=True)
+    run = subprocess.run(cmd, capture_output=True, text=True, check=False)
     print(run.stdout)
     create_seperator("+")
     return run.stdout
@@ -34,11 +35,6 @@ def all_annotations(cls: Any) -> ChainMap:
             for key, val in c.__annotations__.items():
                 if key in anno:
                     continue
-                elif not isinstance(val, type):
-                    try:
-                        val = eval(val)
-                    except TypeError:
-                        pass
                 anno[key] = val
 
     return ChainMap(anno)

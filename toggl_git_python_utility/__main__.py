@@ -1,19 +1,25 @@
+"""
+>>> Main module resposible for running all the tasks in the right containing
+    most of the main funtions at the moment.
+"""
+from __future__ import annotations
+from typing import NamedTuple, Optional, Literal, Final
+
 import sys
 import os
-from typing import Literal
 from pathlib import Path
 import logging
-import requests
 from base64 import b64encode, b64decode
-from typing import NamedTuple, Optional
 
+import requests
 
 from toggl_git_python_utility.config_func import (
     ConfigManager,
     PythonConfig,
     TogglConfig,
 )
-import toggl_git_python_utility.util as util
+
+from toggl_git_python_utility import util
 
 APP_NAME = "Python, Git & Toggl Tracker Utility"
 
@@ -23,7 +29,6 @@ class TgglTracker(NamedTuple):
     >>> Tuple for holding current tracker information while executing the
         rest of the script.
     """
-
     entry_id: int
     workspace_id: int
     description: str
@@ -56,11 +61,15 @@ class TgglApi:
             "Authorization": self.auth_encode,
         }
 
-    def grab_tggl_time_entry(self, project_id: Optional[int] = None) -> TgglTracker:
+    def grab_tggl_time_entry(self, project_id: Optional[int] = None
+                             ) -> TgglTracker:
         """Grabs the specified users current tggl entry"""
-        logging.info("Grabbing current tggl time entry for user %s", self.email)
+        logging.info("Grabbing current Toggl time entry for user %s",
+                     self.email)
         response = requests.get(
-            self.base_url + "/me/time_entries/current", headers=self.headers, timeout=20
+            self.base_url + "/me/time_entries/current",
+            headers=self.headers,
+            timeout=20
         )
         code = response.status_code
         if code != 200:
@@ -82,7 +91,10 @@ class TgglApi:
 
         return tracker
 
-    def stop_tggl_time_entry(self, workspace_id: int, time_entry_id: int) -> bool:
+    def stop_tggl_time_entry(self,
+                             workspace_id: int,
+                             time_entry_id: int
+                             ) -> bool:
         """Stops the specified time tracker."""
         logging.info("Stopping time tracker with id %s.", time_entry_id)
         url = self.base_url
@@ -143,6 +155,8 @@ class CodeManagement:
         in the future for more configurability.
     """
 
+    SEVERITY_MATCH: Final[set[str]] = {"High", "Critical"}
+
     def __init__(self, config: PythonConfig, path: Path = Path(".")) -> None:
         self.path = path
         if path.exists() and path != Path("."):
@@ -177,8 +191,9 @@ class CodeManagement:
         if lint is not None:
             self.lint_code(lint)
 
-            if self.config.format_code:
-                self.format_code(lint)
+        formatter = self.config.formatter
+        if self.config.format_code and formatter:
+            self.format_code(formatter)
 
         if self.package_manager is not None:
             self.generate_requirements()
@@ -207,7 +222,7 @@ class CodeManagement:
 
         return
 
-    def lint_code(self, linter: Literal["Flake8", "Ruff", "Pylint", "Black"]) -> None:
+    def lint_code(self, linter: Literal["Flake8", "Ruff", "Pylint"]) -> None:
         """
         >>> Function that will run the chosen linter and break the rest of the
             routine depending on the configuration. e.g. code 'W291' is marked
@@ -219,18 +234,18 @@ class CodeManagement:
             cmd = f"ruff check .\\{self.code_location}\\"
         elif linter == "Pylint":
             cmd = f"pylint .\\{self.code_location}\\"
-        elif linter == "Black":
-            cmd = f"black .\\{self.code_location}\\"
         else:
             # implementing the other linters at some other point
             return
 
         util.run_sub_command(cmd)
 
-    def format_code(self, linter: Literal["Flake8", "Ruff", "Pylint", "Black"]) -> None:
+    def format_code(self, formatter: Literal["Ruff", "Black"]) -> None:
         """Formats Code if the selected linter has the capability"""
-        if linter == "flake8":
-            cmd = f"flake8 .\\{self.code_location}\\"
+        if formatter == "Ruff":
+            cmd = f"ruff format .\\{self.code_location}\\"
+        elif formatter == "Black":
+            cmd = f"black format .\\{self.code_location}\\"
         else:
             return
 
@@ -244,12 +259,38 @@ class CodeManagement:
         util.run_sub_command(cmd)
 
     def generate_requirements(self) -> None:
-        """Creates a req file or equivalent depending on the package manager."""
+        """
+        >>> Creates a requirement file or equivalent depending on the package
+            manager.
+        >>> *In the future I will be adding more config options allowing to
+             export multiple types of req files.
+        """
         if self.package_manager == "Poetry":
             cmd = "poetry lock"
+        elif self.package_manager == "Conda":
+            # Conda Enviroment name should be adjustable in the config.
+            cmd = "conda .conda export environment.yml"
+        elif self.package_manager == "PIP":
+            cmd = "pip freeze > requirements.txt"
         else:
             return
+
         util.run_sub_command(cmd)
+
+    def security_check(self, checker: Literal["Bandit"] = "Bandit") -> None:
+        """
+        >>> Checks the code for security issues with the chosen provider.
+        """
+        if checker == "Bandit":
+            cmd = f"bandit .\\{self.code_location}\\"
+        else:
+            return
+
+        output = util.run_sub_command(cmd)
+
+        # This should be configurable in the future.
+        if any(f"Severity: {x}" in output for x in self.SEVERITY_MATCH):
+            raise SystemError("Security are are to high.")
 
 
 def main(*argvs):

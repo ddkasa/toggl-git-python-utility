@@ -1,5 +1,5 @@
-import sys
-import os
+"""Configuration setup dialogs and helper functions."""
+
 from typing import (
     Literal,
     Optional,
@@ -8,22 +8,21 @@ from typing import (
     get_origin,
     Union,
 )
+import sys
+import os
 import logging
-# from pprint import pformat, pprint
-
 import base64
 import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-
 import json
-
 
 import maskpass
 
 if __name__ == "__main__":
     root_path = Path(__file__).parent.resolve().parents[0]
     sys.path.append(os.path.abspath(root_path))
+
 
 from toggl_git_python_utility import util
 
@@ -36,8 +35,8 @@ class PythonConfig:
     environment: Literal["Conda", "Venv"] = field(default="Venv")
     type_checking: Optional[Literal["Mypy"]] = field(default=None)
     security_checking: Optional[Literal["Bandit"]] = field(default=None)
-    linting: Optional[Literal["Flake8", "Ruff", "Pylint"]]\
-        = field(default=None)
+    linting: Literal["Flake8", "Ruff", "Pylint"] = field(default="Flake8")
+    formatter: Optional[Literal["Black", "Ruff"]] = field(default=None)
     tests: Optional[Literal["Unittest", "Pytest"]] = field(default=None)
     main_code: Path = field(default=Path("src"))
     format_code: bool = field(default=True)
@@ -107,8 +106,8 @@ class ConfigManager:
         corrupted. It starts creating a new one."""
         logging.info("Loading Configuration")
         try:
-            with self.config_file_path.open("r", encoding="utf-8") as config:
-                data = json.load(config)
+            with self.config_file_path.open("r", encoding="utf-8") as configf:
+                data = json.load(configf)
                 self.config = self.generate_config(ConfigModel, data)
         except json.JSONDecodeError:
             self.new_config()
@@ -142,7 +141,7 @@ class ConfigManager:
         }:
             if get_origin(config_model) == Union:
                 config_model = get_args(config_model)[0]
-            if get_origin(config_model) == Literal:
+            if get_origin(config_model) is Literal:
                 config_model = str
 
             return config_model(convert)
@@ -169,7 +168,7 @@ class ConfigManager:
                 d = select_password(k)
             elif k == "username":
                 d = select_username()
-            elif get_origin(item) == Literal:
+            elif get_origin(item) is Literal:
                 d = select_option(k, item, default)
             elif item == int:
                 d = select_int(k)
@@ -179,7 +178,14 @@ class ConfigManager:
         return config_model(**data)
 
 
-def create_path(key: str, default=Path(".")) -> str:
+def create_path(key: str) -> str:
+    """
+    >>> Asks the user for a path and check if its valid.
+    >>> Might have to expand this in the future in order to have an easier
+        input experience, as absolute/relative paths could cause issues
+        depending on the setup.
+    """
+
     util.create_seperator()
 
     key = key.replace("_", " ").title()
@@ -194,7 +200,14 @@ def create_path(key: str, default=Path(".")) -> str:
         print("Invalid Path Specified")
 
 
-def select_option(key: str, values: Literal, default: Optional[Any] = None) -> Any:
+def select_option(key: str,
+                  values: Literal,
+                  default: Optional[Any] = None
+                  ) -> Any:
+    """
+    >>> Gives a multi choice input for the usser depending on the
+        values[Literal] supplied.
+    """
     util.create_seperator()
 
     items = get_args(values)
@@ -222,22 +235,33 @@ def select_option(key: str, values: Literal, default: Optional[Any] = None) -> A
 
 
 def select_username() -> str:
+    """
+    >>> Asks the user for a username(email) in and validates with regex.
+    >>> *Could have an option for supplying the pattern beforehand in the
+        future.
+    """
     util.create_seperator()
     patt = r"([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+"
-
-    regex = re.compile(patt)
+    pattern = re.compile(patt)
 
     print("Input a username(email) for your Toggl account.")
 
     while True:
         email = input("> ")
 
-        if re.fullmatch(regex, email):
+        if re.fullmatch(pattern, email):
             return email
+
         print("Wrong Email Format! Try Again.")
 
 
 def select_password(key: str) -> str:
+    """
+    >>> Asks for a password without validation, so I might have to include that
+        in the future.
+    >>> Might have to look for a better storage solution as well.
+    """
+
     util.create_seperator()
     key = key.replace("_", " ").title()
     print(f"Type in your {key} for your Toggle Account")
@@ -247,6 +271,11 @@ def select_password(key: str) -> str:
 
 
 def select_int(key: str) -> int:
+    """
+    >>> Basic Integer selection for values such as Project Number or Tracker
+        Number.
+    """
+
     util.create_seperator()
     print(f"What is the {key} you want to use?")
 
