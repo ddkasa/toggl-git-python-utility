@@ -30,7 +30,7 @@ def all_annotations(cls: Any) -> ChainMap:
         cls = cls.__class__
     anno = {}
     for c in reversed(cls.__mro__):
-        if '__annotations__' in c.__dict__:
+        if "__annotations__" in c.__dict__:
             for key, val in c.__annotations__.items():
                 if key in anno:
                     continue
@@ -46,7 +46,7 @@ def all_annotations(cls: Any) -> ChainMap:
 
 def collect_defaults(cls: type) -> defaultdict:
     """Collects default values of a Dataclass Class and replaces them with
-       None if needed."""
+    None if needed."""
     if not isinstance(cls, type):
         cls = cls.__class__
 

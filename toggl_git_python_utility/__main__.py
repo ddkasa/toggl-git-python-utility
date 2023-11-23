@@ -1,5 +1,4 @@
 import sys
-import argparse
 import os
 from typing import Literal
 from pathlib import Path
@@ -9,14 +8,22 @@ from base64 import b64encode, b64decode
 from typing import NamedTuple, Optional
 
 
-from toggl_git_python_utility.config_func import (ConfigManager, PythonConfig,
-                                                  TogglConfig)
+from toggl_git_python_utility.config_func import (
+    ConfigManager,
+    PythonConfig,
+    TogglConfig,
+)
 import toggl_git_python_utility.util as util
 
 APP_NAME = "Python, Git & Toggl Tracker Utility"
 
 
 class TgglTracker(NamedTuple):
+    """
+    >>> Tuple for holding current tracker information while executing the
+        rest of the script.
+    """
+
     entry_id: int
     workspace_id: int
     description: str
@@ -33,7 +40,7 @@ class NotTrackingerror(TrackerError):
 class TgglApi:
     """Setup for dealing with the Toggl API."""
 
-    def __init__(self, auth_token: TogglConfig):
+    def __init__(self, auth_token: TogglConfig) -> None:
         user_data = auth_token.user_data
         self.email = user_data.username
 
@@ -41,24 +48,24 @@ class TgglApi:
 
         auth_txt = f"{self.email}:{password}"
         decode = b64encode(bytes(auth_txt, "utf-8")).decode("ascii")
-        self.auth_encode = "Basic %s" % decode
+        self.auth_encode = f"Basic {decode}"
 
-        self.base_url = r'https://api.track.toggl.com/api/v9'
+        self.base_url = r"https://api.track.toggl.com/api/v9"
         self.headers = {
-            'content-type': 'application/json',
-            'Authorization': self.auth_encode
+            "content-type": "application/json",
+            "Authorization": self.auth_encode,
         }
 
-    def grab_tggl_time_entry(self,
-                             project_id: Optional[int] = None) -> TgglTracker:
+    def grab_tggl_time_entry(self, project_id: Optional[int] = None) -> TgglTracker:
         """Grabs the specified users current tggl entry"""
-        logging.info(f"Grabbing current tggl time entry for user {self.email}")
-        response = requests.get(self.base_url + "/me/time_entries/current",
-                                headers=self.headers)
+        logging.info("Grabbing current tggl time entry for user %s", self.email)
+        response = requests.get(
+            self.base_url + "/me/time_entries/current", headers=self.headers, timeout=20
+        )
         code = response.status_code
         if code != 200:
             logging.error("Failed to connect to tggl api.")
-            logging.error(f"Response Code {code}")
+            logging.error("Response Code: %s", code)
             raise ConnectionError(code)
 
         content = response.json()
@@ -69,23 +76,23 @@ class TgglApi:
         if project_id is not None and project_id != tracker_project_id:
             raise TrackerError("Wrong project id: ", tracker_project_id)
 
-        tracker = TgglTracker(content["id"], content["workspace_id"],
-                              content["description"])
+        tracker = TgglTracker(
+            content["id"], content["workspace_id"], content["description"]
+        )
 
         return tracker
 
-    def stop_tggl_time_entry(self, workspace_id: int,
-                             time_entry_id: int) -> bool:
+    def stop_tggl_time_entry(self, workspace_id: int, time_entry_id: int) -> bool:
         """Stops the specified time tracker."""
-        logging.info(f"Stopping time tracker with id {time_entry_id}")
+        logging.info("Stopping time tracker with id %s.", time_entry_id)
         url = self.base_url
-        url += f'/workspaces/{workspace_id}/time_entries/{time_entry_id}/stop'
-        response = requests.patch(url, headers=self.headers)
+        url += f"/workspaces/{workspace_id}/time_entries/{time_entry_id}/stop"
+        response = requests.patch(url, headers=self.headers, timeout=20)
 
         code = response.status_code
         if code != 200:
             logging.error("Failed to stop time entry.")
-            logging.error(f"Response: {code}")
+            logging.error("Response: %s", {code})
             return False
 
         return True
@@ -98,25 +105,25 @@ class GitManagement:
         more control over whats been run.
     """
 
-    def __init__(self, path: Path = Path(".")):
+    def __init__(self, path: Path = Path(".")) -> None:
         self.path = path if path is not None else Path(".")
         if path is not None and path != Path("."):
             os.chdir(path)
 
-    def add_files(self):
+    def add_files(self) -> None:
         """Adds all files to version control."""
         logging.info("Adding files to version control.")
         command = "git add ."
         util.run_sub_command(command)
 
-    def create_commit(self, message: str):
+    def create_commit(self, message: str) -> None:
         """Creates a commit with the message specified."""
         message = message.title()
-        logging.info(f"Creating a git commit with message: {message}.")
+        logging.info("Creating a git commit with message: %s.", message)
         command = f'git commit -a -m "{message}"'
         util.run_sub_command(command)
 
-    def push_to_remote_repo(self, branch: str = "main"):
+    def push_to_remote_repo(self, branch: str = "main") -> None:
         """Pushes current repo to the specificed branch."""
         command = f"git push origin {branch}"
         util.run_sub_command(command)
@@ -133,24 +140,25 @@ class CodeManagement:
     >>> Deals with managing automatic linting, environment, tests
         and dependency management.
     >>> *Will want to expand this to run the actual python modules themselves
-        in the future.
+        in the future for more configurability.
     """
 
-    def __init__(self, config: PythonConfig, path: Path = Path(".")):
+    def __init__(self, config: PythonConfig, path: Path = Path(".")) -> None:
         self.path = path
         if path.exists() and path != Path("."):
             os.chdir(path)
 
         self.config = config
         self.package_manager = config.package_manager
+        self.code_location = self.config.main_code
 
-    def run_management_routine(self):
+    def run_management_routine(self) -> None:
         """
         >>> Runs the whole code management routine depending on the config
             supplied.
         """
         logging.info("Running current code checking routine.")
-        logging.debug(f"Config: {self.config}")
+        logging.debug("Config: %s", self.config)
         tests = self.config.tests
 
         if tests is not None:
@@ -169,10 +177,13 @@ class CodeManagement:
         if lint is not None:
             self.lint_code(lint)
 
+            if self.config.format_code:
+                self.format_code(lint)
+
         if self.package_manager is not None:
             self.generate_requirements()
 
-    def test_code(self, module: Literal["Unittest", "Pytest"]):
+    def test_code(self, module: Literal["Unittest", "Pytest"]) -> None:
         """
         >>> Functions tests with given framework and cancel script if they
             fail.
@@ -196,33 +207,44 @@ class CodeManagement:
 
         return
 
-    def lint_code(self, linter: Literal["Flake8", "Ruff", "Pylint"]):
+    def lint_code(self, linter: Literal["Flake8", "Ruff", "Pylint", "Black"]) -> None:
         """
         >>> Function that will run the chosen linter and break the rest of the
             routine depending on the configuration. e.g. code 'W291' is marked
             as breaking.
         """
-
-        code_location = self.config.main_code
         if linter == "Flake8":
-            cmd = f"flake8 .\\{code_location}\\"
+            cmd = f"flake8 .\\{self.code_location}\\"
         elif linter == "Ruff":
-            cmd = f"ruff check .\\{code_location}\\"
+            cmd = f"ruff check .\\{self.code_location}\\"
         elif linter == "Pylint":
-            cmd = f"pylint .\\{code_location}\\"
+            cmd = f"pylint .\\{self.code_location}\\"
+        elif linter == "Black":
+            cmd = f"black .\\{self.code_location}\\"
         else:
             # implementing the other linters at some other point
             return
 
         util.run_sub_command(cmd)
 
-    def format_code(self):
-        pass
+    def format_code(self, linter: Literal["Flake8", "Ruff", "Pylint", "Black"]) -> None:
+        """Formats Code if the selected linter has the capability"""
+        if linter == "flake8":
+            cmd = f"flake8 .\\{self.code_location}\\"
+        else:
+            return
 
-    def type_check_code(self):
-        pass
+        util.run_sub_command(cmd)
 
-    def generate_requirements(self):
+    def type_check_code(self) -> None:
+        """Type checks code with MyPy and cancels if needed.
+        *To be Implemented."""
+        code_location = self.config.main_code
+        cmd = f"mypy .\\{code_location}\\"
+        util.run_sub_command(cmd)
+
+    def generate_requirements(self) -> None:
+        """Creates a req file or equivalent depending on the package manager."""
         if self.package_manager == "Poetry":
             cmd = "poetry lock"
         else:
@@ -271,7 +293,7 @@ def main(*argvs):
         logging.critical("User is not tracking a time entry atm.")
         sys.exit()
 
-    logging.info(f"Current time entry name is: {entry.description}")
+    logging.info("Current time entry name is: %s", {entry.description})
 
     code_obj = CodeManagement(config.python, repo_path)
     code_obj.run_management_routine()

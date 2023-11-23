@@ -1,11 +1,15 @@
 import sys
 import os
-import shutil
 from typing import (
-    Final, Literal, Optional, get_args, Any, get_origin, Union, NamedTuple
-    )
+    Literal,
+    Optional,
+    get_args,
+    Any,
+    get_origin,
+    Union,
+)
 import logging
-from pprint import pformat, pprint
+# from pprint import pformat, pprint
 
 import base64
 import re
@@ -21,13 +25,13 @@ if __name__ == "__main__":
     root_path = Path(__file__).parent.resolve().parents[0]
     sys.path.append(os.path.abspath(root_path))
 
-
 from toggl_git_python_utility import util
 
 
 @dataclass
 class PythonConfig:
     """Holds configuration for python code management."""
+
     package_manager: Literal["PIP", "Conda", "Poetry"] = field(default="PIP")
     environment: Literal["Conda", "Venv"] = field(default="Venv")
     type_checking: Optional[Literal["Mypy"]] = field(default=None)
@@ -36,6 +40,7 @@ class PythonConfig:
         = field(default=None)
     tests: Optional[Literal["Unittest", "Pytest"]] = field(default=None)
     main_code: Path = field(default=Path("src"))
+    format_code: bool = field(default=True)
 
     def __post_init__(self):
         self.main_code = Path(self.main_code)
@@ -44,6 +49,7 @@ class PythonConfig:
 @dataclass
 class GitConfig:
     """Holds configuration settings for git code management."""
+
     add: bool = field(default=False)
     commit: bool = field(default=True)
     push: bool = field(default=False)
@@ -51,13 +57,17 @@ class GitConfig:
 
 @dataclass
 class TogglAuth:
+    """Authentication information for Toggl Tracker."""
+
     username: str
     password: str
-    api_key: str
+    api_key: Optional[str] = field(default=None)
 
 
 @dataclass
 class TogglConfig:
+    """Configuration information for Toggl management."""
+
     user_data: TogglAuth
     project: Optional[int] = field(default=None)
     cancel: bool = field(default=False)
@@ -65,6 +75,8 @@ class TogglConfig:
 
 @dataclass
 class ConfigModel:
+    """Base Config items including the original target_directory."""
+
     target_directory: Path = field()
     python: PythonConfig
     git: GitConfig
@@ -92,7 +104,7 @@ class ConfigManager:
 
     def load_config(self):
         """Loads the existing configuration. If one doesn't exist or is
-           corrupted. It starts creating a new one."""
+        corrupted. It starts creating a new one."""
         logging.info("Loading Configuration")
         try:
             with self.config_file_path.open("r", encoding="utf-8") as config:
@@ -111,16 +123,23 @@ class ConfigManager:
         with self.config_file_path.open("w", encoding="utf-8") as configfile:
             configfile.write(json.dumps(conf, cls=util.CustomJSONEncoder))
 
-    def generate_config(self, config_model: type,
-                        convert: Optional[dict] = None) -> Any:
+    def generate_config(
+        self, config_model: type, convert: Optional[dict] = None
+    ) -> Any:
         """Generates a json config or converts an existing one depending if a
-           convert was passed in or not."""
+        convert was passed in or not."""
 
         config_an = util.all_annotations(config_model)
         defaults = util.collect_defaults(config_model)
 
-        if config_model not in {TogglConfig, TogglAuth, PythonConfig,
-                                GitConfig, ConfigModel}:
+        if config_model not in {
+            TogglConfig,
+            TogglAuth,
+            PythonConfig,
+            GitConfig,
+            ConfigModel,
+            dict,
+        }:
             if get_origin(config_model) == Union:
                 config_model = get_args(config_model)[0]
             if get_origin(config_model) == Literal:
@@ -130,7 +149,6 @@ class ConfigManager:
 
         data = {}
         for k, v in config_an.items():
-
             item = v
             default = defaults[k]
             origin = get_origin(item)
@@ -176,8 +194,7 @@ def create_path(key: str, default=Path(".")) -> str:
         print("Invalid Path Specified")
 
 
-def select_option(key: str, values: Literal, default: Optional[Any] = None
-                  ) -> Any:
+def select_option(key: str, values: Literal, default: Optional[Any] = None) -> Any:
     util.create_seperator()
 
     items = get_args(values)
@@ -244,7 +261,7 @@ def select_int(key: str) -> int:
         return item
 
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     FMT = "%(asctime)s | %(module)s@%(funcName)s:%(lineno)d | %(levelname)s ->"
     FMT += " %(message)s"
     logging.basicConfig(format=FMT, level=logging.INFO)
