@@ -26,6 +26,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 .conda
+.env/
+.python-version
 
 # Cache
 .pytest_cache

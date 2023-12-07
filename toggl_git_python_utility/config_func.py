@@ -88,7 +88,7 @@ class ConfigModel:
 class ConfigManager:
     """Class for managing basic configuration duties."""
 
-    def __init__(self, new=False):
+    def __init__(self, new: bool = False):
         self.config_folder = Path(r"toggl_git_python_utility\config")
         self.config_file_path = self.config_folder / "configuration.json"
 
